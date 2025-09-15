@@ -1,0 +1,85 @@
+WITH enriched_sessions AS (
+  SELECT
+    s.date AS session_date,
+    s.ga_session_id AS session_id,
+    sp.continent AS continent,
+    sp.country AS country,
+    sp.device AS device,
+    sp.browser AS browser,
+    sp.language AS browser_language,
+    sp.channel AS traffic_channel,
+    a.id AS registered_user_id,
+    a.is_verified AS email_verified,
+    CASE
+      WHEN a.is_unsubscribed IS NULL THEN NULL
+      WHEN a.is_unsubscribed = 1 THEN FALSE
+      WHEN a.is_unsubscribed = 0 THEN TRUE
+    END AS newsletter_subscribed,
+    NULL AS operating_system,
+    NULL AS traffic_source
+  FROM `DA.session` s
+  LEFT JOIN `DA.session_params` sp
+    ON s.ga_session_id = sp.ga_session_id
+  LEFT JOIN `DA.account_session` acs
+    ON s.ga_session_id = acs.ga_session_id
+  LEFT JOIN `DA.account` a
+    ON acs.account_id = a.id
+),
+
+
+orders_with_products AS (
+  SELECT
+    o.item_id AS order_item_id,
+    o.ga_session_id AS session_id,
+    p.category AS product_category,
+    p.name AS product_name,
+    p.price AS price,
+    p.short_description AS product_description
+  FROM `DA.order` o
+  LEFT JOIN `DA.product` p
+    ON o.item_id = p.item_id
+  WHERE p.price IS NOT NULL
+),
+
+
+email_events AS (
+  SELECT
+    id_account AS registered_user_id,
+    sent_date,
+    letter_type,
+    id_message
+  FROM `DA.email_sent`
+)
+
+
+SELECT
+  es.session_date AS order_date,
+  es.session_id,
+  es.continent,
+  es.country,
+  es.device,
+  es.operating_system,
+  es.browser,
+  es.browser_language,
+  es.traffic_source,
+  es.traffic_channel,
+  es.registered_user_id,
+  es.email_verified,
+  es.newsletter_subscribed,
+  owp.product_category,
+  owp.product_name,
+  owp.price,
+  owp.product_description,
+  e.sent_date AS email_sent_date,
+  e.letter_type,
+  e.id_message
+FROM enriched_sessions es
+LEFT JOIN orders_with_products owp
+  ON es.session_id = owp.session_id  
+LEFT JOIN email_events e
+  ON es.registered_user_id = e.registered_user_id
+
+
+
+
+
